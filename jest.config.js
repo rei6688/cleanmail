@@ -1,6 +1,4 @@
-import type { Config } from "jest";
-
-const config: Config = {
+module.exports = {
   testEnvironment: "node",
   transform: {
     "^.+\\.tsx?$": [
@@ -18,5 +16,3 @@ const config: Config = {
   },
   testMatch: ["**/__tests__/**/*.test.ts"],
 };
-
-export default config;

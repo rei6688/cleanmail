@@ -2,6 +2,7 @@ import { connectDB } from "@/infra/db/connection";
 import { ExecutionLog } from "@/models/execution-log";
 import type { IExecutionLog, ExecutionStats, LogStatus } from "@/types";
 import type { Types } from "mongoose";
+import { pojoify } from "@/lib/utils";
 
 export interface CreateLogInput {
   userId: Types.ObjectId | string;
@@ -17,7 +18,7 @@ export interface CreateLogInput {
 export async function createLog(data: CreateLogInput): Promise<IExecutionLog> {
   await connectDB();
   const log = await ExecutionLog.create(data);
-  return log as unknown as IExecutionLog;
+  return pojoify(log.toObject() as unknown as IExecutionLog);
 }
 
 export async function getLogs(
@@ -25,10 +26,11 @@ export async function getLogs(
   limit = 50
 ): Promise<IExecutionLog[]> {
   await connectDB();
-  return ExecutionLog.find({ userId })
+  const logs = await ExecutionLog.find({ userId })
     .sort({ createdAt: -1 })
     .limit(limit)
-    .lean() as Promise<IExecutionLog[]>;
+    .lean();
+  return pojoify(logs as unknown as IExecutionLog[]);
 }
 
 export async function getRecentStats(

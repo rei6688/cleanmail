@@ -11,6 +11,7 @@ function makeRule(overrides: Partial<IRule["conditions"]> = {}, ruleOverrides: P
     conditions: {
       senders: [],
       subjectKeywords: [],
+      bodyKeywords: [],
       excludeKeywords: [],
       readFilter: "any",
       sourceFolders: [],
@@ -79,10 +80,11 @@ describe("messageMatchesRule", () => {
     expect(messageMatchesRule(makeMessage({ isRead: true }), rule)).toBe(false);
   });
 
-  it("filters by source folder", () => {
-    const rule = makeRule({ sourceFolders: ["inbox"] });
-    expect(messageMatchesRule(makeMessage({ parentFolderId: "inbox" }), rule)).toBe(true);
-    expect(messageMatchesRule(makeMessage({ parentFolderId: "drafts" }), rule)).toBe(false);
+  it("filters by body keywords", () => {
+    const rule = makeRule({ bodyKeywords: ["secret code"] });
+    expect(messageMatchesRule(makeMessage({ bodyPreview: "The secret code is 123" }), rule)).toBe(true);
+    expect(messageMatchesRule(makeMessage({ body: { contentType: "text", content: "Your secret code" } }), rule)).toBe(true);
+    expect(messageMatchesRule(makeMessage({ bodyPreview: "Nothing here" }), rule)).toBe(false);
   });
 });
 

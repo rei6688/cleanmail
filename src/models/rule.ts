@@ -5,6 +5,7 @@ const RuleConditionsSchema = new Schema(
   {
     senders: { type: [String], default: [] },
     subjectKeywords: { type: [String], default: [] },
+    bodyKeywords: { type: [String], default: [] },
     excludeKeywords: { type: [String], default: [] },
     readFilter: {
       type: String,

@@ -6,6 +6,7 @@ export const ReadFilterSchema = z.enum(["read", "unread", "any"]);
 export const RuleConditionsSchema = z.object({
   senders: z.array(z.string()).default([]),
   subjectKeywords: z.array(z.string()).default([]),
+  bodyKeywords: z.array(z.string()).default([]),
   excludeKeywords: z.array(z.string()).default([]),
   readFilter: ReadFilterSchema.default("any"),
   sourceFolders: z.array(z.string()).default([]),

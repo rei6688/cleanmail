@@ -3,6 +3,7 @@ import {
   moveMessage,
   updateMessageCategories,
   getFolderIdByName,
+  createMailFolder,
 } from "@/infra/graph-client";
 import { computeCategories } from "@/domain/rule-engine";
 
@@ -38,9 +39,16 @@ export async function organizeMessages(
   let targetFolderId = rule.targetFolder;
   try {
     const resolved = await getFolderIdByName(accessToken, rule.targetFolder);
-    if (resolved) targetFolderId = resolved;
-  } catch {
-    // If we can't resolve, try with the raw value (might be an id already)
+    if (resolved) {
+      targetFolderId = resolved;
+    } else {
+      // Auto-create folder if it doesn't exist
+      const newFolder = await createMailFolder(accessToken, rule.targetFolder);
+      targetFolderId = newFolder.id;
+    }
+  } catch (e) {
+    // If we can't resolve or create, try with the raw value (might be an id already)
+    console.error(`[organizer] Folder resolution/creation failed for ${rule.targetFolder}:`, e);
   }
 
   for (const message of messages) {

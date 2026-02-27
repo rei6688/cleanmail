@@ -9,9 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { scanEmails } from "@/actions/scan";
 import { organizeEmails } from "@/actions/organize";
 import type { ScanResult } from "@/actions/scan";
-import { Search, Play, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, Play, Loader2, Calendar } from "lucide-react";
 
 export default function ScanPage() {
+  const [range, setRange] = useState("6m");
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -23,6 +31,17 @@ export default function ScanPage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function getOptions() {
+    if (range === "custom") {
+      return {
+        yearFrom: yearFrom ? Number(yearFrom) : undefined,
+        yearTo: yearTo ? Number(yearTo) : undefined,
+      };
+    }
+    const months = range === "1m" ? 1 : range === "3m" ? 3 : range === "6m" ? 6 : 12;
+    return { monthsBack: months };
+  }
+
   async function handleScan() {
     setScanning(true);
     setError(null);
@@ -30,8 +49,7 @@ export default function ScanPage() {
     setOrganizeResult(null);
 
     const result = await scanEmails({
-      yearFrom: yearFrom ? Number(yearFrom) : undefined,
-      yearTo: yearTo ? Number(yearTo) : undefined,
+      ...getOptions(),
       preview: true,
     });
 
@@ -48,8 +66,7 @@ export default function ScanPage() {
     setError(null);
 
     const result = await organizeEmails({
-      yearFrom: yearFrom ? Number(yearFrom) : undefined,
-      yearTo: yearTo ? Number(yearTo) : undefined,
+      ...getOptions(),
       dryRun: false,
     });
 
@@ -79,29 +96,46 @@ export default function ScanPage() {
           <CardTitle className="text-base">Options</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Year from</Label>
-              <Input
-                type="number"
-                value={yearFrom}
-                onChange={(e) => setYearFrom(e.target.value)}
-                placeholder="2020"
-                min={2000}
-                max={2100}
-              />
+              <Label>Scan Range</Label>
+              <Select value={range} onValueChange={setRange}>
+                <SelectTrigger>
+                  <Calendar className="mr-2 h-4 w-4 text-gray-400" />
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1m">Last 30 days</SelectItem>
+                  <SelectItem value="3m">Last 3 months</SelectItem>
+                  <SelectItem value="6m">Last 6 months</SelectItem>
+                  <SelectItem value="1y">Last Year</SelectItem>
+                  <SelectItem value="custom">Custom Year Range</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Year to</Label>
-              <Input
-                type="number"
-                value={yearTo}
-                onChange={(e) => setYearTo(e.target.value)}
-                placeholder={String(new Date().getFullYear())}
-                min={2000}
-                max={2100}
-              />
-            </div>
+
+            {range === "custom" && (
+              <div className="flex gap-2 items-end">
+                <div className="space-y-2 flex-1">
+                  <Label>From</Label>
+                  <Input
+                    type="number"
+                    value={yearFrom}
+                    onChange={(e) => setYearFrom(e.target.value)}
+                    placeholder="2020"
+                  />
+                </div>
+                <div className="space-y-2 flex-1">
+                  <Label>To</Label>
+                  <Input
+                    type="number"
+                    value={yearTo}
+                    onChange={(e) => setYearTo(e.target.value)}
+                    placeholder="2026"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3">

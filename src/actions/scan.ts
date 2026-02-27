@@ -63,44 +63,69 @@ export async function scanEmails(
   if (options.yearFrom || options.yearTo) {
     const parts: string[] = [];
     if (options.yearFrom)
-      parts.push(
-        `receivedDateTime ge ${options.yearFrom}-01-01T00:00:00Z`
-      );
+      parts.push(`receivedDateTime ge ${options.yearFrom}-01-01T00:00:00Z`);
     if (options.yearTo)
-      parts.push(
-        `receivedDateTime lt ${options.yearTo + 1}-01-01T00:00:00Z`
-      );
+      parts.push(`receivedDateTime lt ${options.yearTo + 1}-01-01T00:00:00Z`);
     filter = parts.join(" and ");
+  } else if (options.monthsBack) {
+    const since = new Date();
+    since.setMonth(since.getMonth() - options.monthsBack);
+    filter = `receivedDateTime ge ${since.toISOString()}`;
+  } else {
+    // Default to last 6 months for performance
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    filter = `receivedDateTime ge ${sixMonthsAgo.toISOString()}`;
   }
 
-  const MAX_PAGES = 20; // cap at 1000 messages per folder per rule
+  console.log(`[scan] User: ${dbUser.email}, Filter: ${filter}, Rules: ${rules.length}`);
+
+  // Collect unique source folders
+  const allFolders = new Set<string>();
+  rules.forEach((r) => {
+    if (r.conditions.sourceFolders.length > 0) {
+      r.conditions.sourceFolders.forEach((f) => allFolders.add(f));
+    } else {
+      allFolders.add("inbox");
+    }
+  });
+
+  const MAX_PAGES = 5; // Reduced default pages to avoid timeouts in dev
   const matches: ScanMatch[] = [];
 
-  for (const rule of rules) {
-    const sourceFolders =
-      rule.conditions.sourceFolders.length > 0
-        ? rule.conditions.sourceFolders
-        : ["inbox"];
+  for (const folder of Array.from(allFolders)) {
+    console.log(`[scan] Scanning folder: ${folder}`);
+    let nextLink: string | undefined;
+    let pages = 0;
+    do {
+      const { value, nextLink: nl } = await listMessages(accessToken, {
+        folder,
+        filter,
+        top: 50,
+      });
+      nextLink = nl;
+      pages++;
 
-    for (const folder of sourceFolders) {
-      let nextLink: string | undefined;
-      let pages = 0;
-      do {
-        const { value, nextLink: nl } = await listMessages(accessToken, {
-          folder,
-          filter,
-          top: 50,
-        });
-        nextLink = nl;
-        pages++;
+      console.log(`[scan] Fetched ${value.length} messages from ${folder} (page ${pages})`);
 
-        const matched = applyRule(value, rule);
-        for (const m of matched) {
-          matches.push({ message: m, rule: { id: String(rule._id), name: rule.name } });
+      for (const message of value) {
+        for (const rule of rules) {
+          // Verify if folder is relevant to this rule
+          const isTargeted =
+            rule.conditions.sourceFolders.length === 0 && folder === "inbox" ||
+            rule.conditions.sourceFolders.some(f => f.toLowerCase() === folder.toLowerCase());
+
+          if (isTargeted && applyRule([message], rule).length > 0) {
+            matches.push({
+              message,
+              rule: { id: String(rule._id), name: rule.name }
+            });
+          }
         }
-      } while (nextLink && pages < MAX_PAGES);
-    }
+      }
+    } while (nextLink && pages < MAX_PAGES);
   }
 
+  console.log(`[scan] Completed. Found ${matches.length} total matches.`);
   return ok({ matches, total: matches.length });
 }

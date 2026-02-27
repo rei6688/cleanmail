@@ -8,12 +8,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     MicrosoftEntraID({
       clientId: process.env.MICROSOFT_CLIENT_ID ?? "",
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
-      issuer: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID ?? "common"}/v2.0/`,
-      authorization: {
-        params: {
-          scope:
-            "openid email profile offline_access Mail.ReadWrite MailboxSettings.Read",
-        },
+      // Manually set endpoints to bypass strict OIDC issuer validation for "common" tenant
+      authorization:
+        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?scope=openid+email+profile+offline_access+Mail.ReadWrite+MailboxSettings.Read",
+      token: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+      userinfo: "https://graph.microsoft.com/oidc/userinfo",
+      client: {
+        token_endpoint_auth_method: "client_secret_post",
+      },
+      profile(profile) {
+        return {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          image: profile.picture,
+        };
       },
     }),
   ],

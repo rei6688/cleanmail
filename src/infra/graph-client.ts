@@ -37,10 +37,20 @@ export async function listMailFolders(
   accessToken: string
 ): Promise<GraphFolder[]> {
   const data = await graphFetch<{ value: GraphFolder[] }>(
-    `${GRAPH_BASE}/mailFolders?$top=50`,
+    `${GRAPH_BASE}/mailFolders?$top=250`,
     accessToken
   );
   return data.value;
+}
+
+export async function createMailFolder(
+  accessToken: string,
+  displayName: string
+): Promise<GraphFolder> {
+  return graphFetch<GraphFolder>(`${GRAPH_BASE}/mailFolders`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({ displayName }),
+  });
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -60,12 +70,17 @@ export async function listMessages(
   const top = options.top ?? 50;
   const params = new URLSearchParams({
     $top: String(top),
-    $select: "id,subject,from,isRead,categories,parentFolderId,receivedDateTime",
+    $select:
+      "id,subject,from,isRead,categories,parentFolderId,receivedDateTime,bodyPreview,body",
+    $orderby: "receivedDateTime desc",
   });
   if (options.filter) params.set("$filter", options.filter);
   if (options.skip) params.set("$skip", String(options.skip));
 
-  const data = await graphFetch<{ value: GraphMessage[]; "@odata.nextLink"?: string }>(
+  const data = await graphFetch<{
+    value: GraphMessage[];
+    "@odata.nextLink"?: string;
+  }>(
     `${GRAPH_BASE}/mailFolders/${folder}/messages?${params.toString()}`,
     accessToken
   );
