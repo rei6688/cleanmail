@@ -3,21 +3,24 @@ import { Rule } from "@/models/rule";
 import type { IRule } from "@/types";
 import type { CreateRuleInput, UpdateRuleInput } from "@/schemas/rule";
 import type { Types } from "mongoose";
+import { pojoify } from "@/lib/utils";
 
 export async function getRules(userId: string | Types.ObjectId): Promise<IRule[]> {
   await connectDB();
-  return Rule.find({ userId })
+  const rules = await Rule.find({ userId })
     .sort({ createdAt: -1 })
-    .lean() as Promise<IRule[]>;
+    .lean();
+  return pojoify(rules as unknown as IRule[]);
 }
 
 export async function getEnabledRules(
   userId: string | Types.ObjectId
 ): Promise<IRule[]> {
   await connectDB();
-  return Rule.find({ userId, enabled: true })
+  const rules = await Rule.find({ userId, enabled: true })
     .sort({ createdAt: -1 })
-    .lean() as Promise<IRule[]>;
+    .lean();
+  return pojoify(rules as unknown as IRule[]);
 }
 
 export async function getRuleById(
@@ -25,7 +28,8 @@ export async function getRuleById(
   userId: string | Types.ObjectId
 ): Promise<IRule | null> {
   await connectDB();
-  return Rule.findOne({ _id: id, userId }).lean() as Promise<IRule | null>;
+  const rule = await Rule.findOne({ _id: id, userId }).lean();
+  return pojoify(rule as unknown as IRule | null);
 }
 
 export async function createRule(
@@ -34,7 +38,7 @@ export async function createRule(
 ): Promise<IRule> {
   await connectDB();
   const rule = await Rule.create({ userId, ...data });
-  return rule as unknown as IRule;
+  return pojoify(rule.toObject() as unknown as IRule);
 }
 
 export async function updateRule(
@@ -43,11 +47,12 @@ export async function updateRule(
   data: UpdateRuleInput
 ): Promise<IRule | null> {
   await connectDB();
-  return Rule.findOneAndUpdate(
+  const rule = await Rule.findOneAndUpdate(
     { _id: id, userId },
     { $set: data },
     { new: true }
-  ).lean() as Promise<IRule | null>;
+  ).lean();
+  return pojoify(rule as unknown as IRule | null);
 }
 
 export async function deleteRule(

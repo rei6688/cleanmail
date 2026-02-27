@@ -41,6 +41,9 @@ export function RuleForm({ rule }: Props) {
   const [subjectKeywords, setSubjectKeywords] = useState(
     rule?.conditions.subjectKeywords.join(", ") ?? ""
   );
+  const [bodyKeywords, setBodyKeywords] = useState(
+    rule?.conditions.bodyKeywords.join(", ") ?? ""
+  );
   const [excludeKeywords, setExcludeKeywords] = useState(
     rule?.conditions.excludeKeywords.join(", ") ?? ""
   );
@@ -69,6 +72,7 @@ export function RuleForm({ rule }: Props) {
       conditions: {
         senders: tagsInput(senders),
         subjectKeywords: tagsInput(subjectKeywords),
+        bodyKeywords: tagsInput(bodyKeywords),
         excludeKeywords: tagsInput(excludeKeywords),
         readFilter,
         sourceFolders: tagsInput(sourceFolders),
@@ -140,6 +144,14 @@ export function RuleForm({ rule }: Props) {
               value={subjectKeywords}
               onChange={(e) => setSubjectKeywords(e.target.value)}
               placeholder="unsubscribe, weekly digest"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Body keywords (comma-separated)</Label>
+            <Input
+              value={bodyKeywords}
+              onChange={(e) => setBodyKeywords(e.target.value)}
+              placeholder="promo code, discount, receipt"
             />
           </div>
           <div className="space-y-2">

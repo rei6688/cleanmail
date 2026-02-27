@@ -48,6 +48,7 @@ export type ReadFilter = "read" | "unread" | "any";
 export interface RuleConditions {
   senders: string[];
   subjectKeywords: string[];
+  bodyKeywords: string[];
   excludeKeywords: string[];
   readFilter: ReadFilter;
   sourceFolders: string[];
@@ -103,6 +104,11 @@ export interface GraphMessage {
   isRead?: boolean;
   categories?: string[];
   parentFolderId?: string;
+  bodyPreview?: string;
+  body?: {
+    contentType: "text" | "html";
+    content: string;
+  };
 }
 
 export interface GraphFolder {
@@ -117,6 +123,7 @@ export interface ScanOptions {
   ruleId?: string;
   yearFrom?: number;
   yearTo?: number;
+  monthsBack?: number;
   preview?: boolean;
 }
 
@@ -129,5 +136,6 @@ export interface OrganizeOptions {
   ruleId?: string;
   yearFrom?: number;
   yearTo?: number;
+  monthsBack?: number;
   dryRun?: boolean;
 }

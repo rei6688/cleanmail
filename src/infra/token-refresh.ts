@@ -22,11 +22,12 @@ export async function getValidToken(
   const now = new Date();
   const bufferMs = BUFFER_SECONDS * 1000;
 
-  if (account.expiresAt.getTime() - now.getTime() > bufferMs) {
+  const expiresAt = new Date(account.expiresAt);
+  if (expiresAt.getTime() - now.getTime() > bufferMs) {
     return {
       accessToken: account.accessToken,
       refreshToken: account.refreshToken,
-      expiresAt: account.expiresAt,
+      expiresAt: expiresAt,
     };
   }
 

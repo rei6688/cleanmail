@@ -19,7 +19,10 @@ export function messageMatchesRule(
     const matchesSender = cond.senders.some((s) =>
       sender.includes(s.toLowerCase())
     );
-    if (!matchesSender) return false;
+    if (!matchesSender) {
+      console.log(`[match] Fail: Sender "${sender}" does not match [${cond.senders}]`);
+      return false;
+    }
   }
 
   // ── subject keyword filter (include) ─────────────────────────────────────
@@ -27,7 +30,25 @@ export function messageMatchesRule(
     const matchesKeyword = cond.subjectKeywords.some((kw) =>
       subject.includes(kw.toLowerCase())
     );
-    if (!matchesKeyword) return false;
+    if (!matchesKeyword) {
+      console.log(`[match] Fail: Subject "${subject}" does not match [${cond.subjectKeywords}]`);
+      return false;
+    }
+  }
+
+  // ── body keyword filter (include) ─────────────────────────────────────────
+  if (cond.bodyKeywords && cond.bodyKeywords.length > 0) {
+    const bodyText = (
+      (message.body?.content ?? "") + (message.bodyPreview ?? "")
+    ).toLowerCase();
+
+    const matchesBodyKeyword = cond.bodyKeywords.some((kw) =>
+      bodyText.includes(kw.toLowerCase())
+    );
+    if (!matchesBodyKeyword) {
+      console.log(`[match] Fail: Body (len: ${bodyText.length}) does not match [${cond.bodyKeywords}]`);
+      return false;
+    }
   }
 
   // ── subject keyword filter (exclude) ─────────────────────────────────────
@@ -35,24 +56,17 @@ export function messageMatchesRule(
     const matchesExclude = cond.excludeKeywords.some((kw) =>
       subject.includes(kw.toLowerCase())
     );
-    if (matchesExclude) return false;
+    if (matchesExclude) {
+      console.log(`[match] Fail: Subject excluded by "${subject}" contains [${cond.excludeKeywords}]`);
+      return false;
+    }
   }
 
   // ── read/unread filter ─────────────────────────────────────────────────────
   if (cond.readFilter === "read" && message.isRead !== true) return false;
   if (cond.readFilter === "unread" && message.isRead !== false) return false;
 
-  // ── source folder filter ──────────────────────────────────────────────────
-  if (cond.sourceFolders.length > 0) {
-    const parentId = message.parentFolderId ?? "";
-    const matchesFolder = cond.sourceFolders.some(
-      (f) =>
-        parentId.toLowerCase() === f.toLowerCase() ||
-        parentId.toLowerCase().includes(f.toLowerCase())
-    );
-    if (!matchesFolder) return false;
-  }
-
+  console.log(`[match] SUCCESS: Found mail "${subject}"`);
   return true;
 }
 

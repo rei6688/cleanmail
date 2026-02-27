@@ -1,6 +1,7 @@
 import { connectDB } from "@/infra/db/connection";
 import { User } from "@/models/user";
 import type { IUser } from "@/types";
+import { pojoify } from "@/lib/utils";
 
 export async function upsertUser(data: {
   microsoftId: string;
@@ -12,14 +13,21 @@ export async function upsertUser(data: {
   const user = await User.findOneAndUpdate(
     { microsoftId: data.microsoftId },
     { $set: data },
-    { upsert: true, new: true }
+    { upsert: true, new: true, lean: true }
   );
-  return user as unknown as IUser;
+  return pojoify(user as unknown as IUser);
 }
 
 export async function findUserByMicrosoftId(
   microsoftId: string
 ): Promise<IUser | null> {
   await connectDB();
-  return User.findOne({ microsoftId }).lean() as Promise<IUser | null>;
+  const user = await User.findOne({ microsoftId }).lean();
+  return pojoify(user as unknown as IUser | null);
+}
+
+export async function findAllUsers(): Promise<IUser[]> {
+  await connectDB();
+  const users = await User.find({}).lean();
+  return pojoify(users as unknown as IUser[]);
 }

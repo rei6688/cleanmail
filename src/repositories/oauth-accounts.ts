@@ -2,6 +2,7 @@ import { connectDB } from "@/infra/db/connection";
 import { OAuthAccount } from "@/models/oauth-account";
 import type { IOAuthAccount } from "@/types";
 import type { Types } from "mongoose";
+import { pojoify } from "@/lib/utils";
 
 export async function upsertOAuthAccount(data: {
   userId: Types.ObjectId;
@@ -15,9 +16,9 @@ export async function upsertOAuthAccount(data: {
   const account = await OAuthAccount.findOneAndUpdate(
     { userId: data.userId, provider: data.provider },
     { $set: data },
-    { upsert: true, new: true }
+    { upsert: true, new: true, lean: true }
   );
-  return account as unknown as IOAuthAccount;
+  return pojoify(account as unknown as IOAuthAccount);
 }
 
 export async function getOAuthAccount(
@@ -25,7 +26,8 @@ export async function getOAuthAccount(
   provider = "microsoft"
 ): Promise<IOAuthAccount | null> {
   await connectDB();
-  return OAuthAccount.findOne({ userId, provider }).lean() as Promise<IOAuthAccount | null>;
+  const account = await OAuthAccount.findOne({ userId, provider }).lean();
+  return pojoify(account as unknown as IOAuthAccount | null);
 }
 
 export async function updateTokens(
