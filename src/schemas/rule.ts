@@ -15,13 +15,18 @@ export const RuleConditionsSchema = z.object({
 export const CategoryActionSchema = z.object({
   policy: CategoryPolicySchema.default("none"),
   categories: z.array(z.string()).default([]),
+  categoryColor: z.string().optional(),
 });
 
 export const CreateRuleSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   enabled: z.boolean().default(true),
   conditions: RuleConditionsSchema,
-  targetFolder: z.string().min(1, "Target folder is required"),
+  action: z.object({
+    type: z.enum(["move", "delete"]).default("move"),
+    targetFolder: z.string().optional(),
+  }),
+  retentionDays: z.number().min(0).default(0),
   categoryAction: CategoryActionSchema,
 });
 

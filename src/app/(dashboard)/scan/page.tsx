@@ -27,6 +27,7 @@ export default function ScanPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [organizeResult, setOrganizeResult] = useState<{
     totalMoved: number;
+    totalDeleted: number;
     totalFailed: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export default function ScanPage() {
     }
     setOrganizeResult({
       totalMoved: result.data.totalMoved,
+      totalDeleted: result.data.totalDeleted,
       totalFailed: result.data.totalFailed,
     });
     setScanResult(null);
@@ -179,6 +181,11 @@ export default function ScanPage() {
               <span className="text-green-700">
                 ✓ {organizeResult.totalMoved} moved
               </span>
+              {organizeResult.totalDeleted > 0 && (
+                <span className="text-purple-700">
+                  🗑️ {organizeResult.totalDeleted} deleted
+                </span>
+              )}
               {organizeResult.totalFailed > 0 && (
                 <span className="text-red-700">
                   ✗ {organizeResult.totalFailed} failed

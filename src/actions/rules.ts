@@ -82,3 +82,22 @@ export async function toggleRuleAction(
 ): Promise<Result<IRule>> {
   return updateRuleAction(id, { enabled });
 }
+
+export async function copyRuleAction(id: string): Promise<Result<IRule>> {
+  const userId = await getDbUserId();
+  if (!userId) return err("Not authenticated");
+
+  const rule = await getRuleById(id, userId);
+  if (!rule) return err("Rule not found");
+
+  const castedRule = rule as any;
+  const { _id, createdAt, updatedAt, ...rest } = castedRule.toObject ? castedRule.toObject() : castedRule;
+
+  const cloned = await createRule(userId, {
+    ...rest,
+    name: `${rest.name} (Copy)`,
+  });
+
+  revalidatePath("/rules");
+  return ok(cloned);
+}

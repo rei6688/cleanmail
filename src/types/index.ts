@@ -57,6 +57,7 @@ export interface RuleConditions {
 export interface CategoryAction {
   policy: CategoryPolicy;
   categories: string[];
+  categoryColor?: string;
 }
 
 export interface IRule {
@@ -65,7 +66,11 @@ export interface IRule {
   name: string;
   enabled: boolean;
   conditions: RuleConditions;
-  targetFolder: string;
+  action: {
+    type: "move" | "delete";
+    targetFolder?: string;
+  };
+  retentionDays?: number; // 0 or null = never delete
   categoryAction: CategoryAction;
   createdAt: Date;
   updatedAt: Date;
@@ -78,6 +83,7 @@ export type LogStatus = "success" | "partial" | "error";
 export interface ExecutionStats {
   matched: number;
   moved: number;
+  deleted: number;
   skipped: number;
   failed: number;
 }
@@ -104,6 +110,7 @@ export interface GraphMessage {
   isRead?: boolean;
   categories?: string[];
   parentFolderId?: string;
+  receivedDateTime?: string;
   bodyPreview?: string;
   body?: {
     contentType: "text" | "html";
@@ -138,4 +145,14 @@ export interface OrganizeOptions {
   yearTo?: number;
   monthsBack?: number;
   dryRun?: boolean;
+  stagingMode?: boolean;
+  stagingTag?: string;
+  stagingTagColor?: string;
+  onlyTagMode?: boolean;
+  overrideSourceFolders?: string[];
+  removeTag?: string;
+  addTag?: string;
+  addTagColor?: string;
+  clearCategories?: boolean;
+  runInTargetFolder?: boolean;
 }

@@ -48,8 +48,8 @@ export default async function LogsPage() {
                           log.status === "success"
                             ? "success"
                             : log.status === "partial"
-                            ? "warning"
-                            : "destructive"
+                              ? "warning"
+                              : "destructive"
                         }
                       >
                         {log.status}
@@ -69,6 +69,12 @@ export default async function LogsPage() {
                       <span className="font-medium">{log.stats.moved}</span>{" "}
                       moved
                     </span>
+                    {log.stats.deleted > 0 && (
+                      <span className="text-purple-700">
+                        <span className="font-medium">{log.stats.deleted}</span>{" "}
+                        deleted
+                      </span>
+                    )}
                     {log.stats.failed > 0 && (
                       <span className="text-red-700">
                         <span className="font-medium">{log.stats.failed}</span>{" "}

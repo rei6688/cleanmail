@@ -54,7 +54,7 @@ export async function refreshAccessToken(
     refresh_token: refreshToken,
     grant_type: "refresh_token",
     scope:
-      "openid email profile offline_access Mail.ReadWrite MailboxSettings.Read",
+      "openid email profile offline_access Mail.ReadWrite MailboxSettings.ReadWrite",
   });
 
   const response = await fetch(TOKEN_REFRESH_URL, {

@@ -5,6 +5,7 @@ const ExecutionStatsSchema = new Schema(
   {
     matched: { type: Number, default: 0 },
     moved: { type: Number, default: 0 },
+    deleted: { type: Number, default: 0 },
     skipped: { type: Number, default: 0 },
     failed: { type: Number, default: 0 },
   },
