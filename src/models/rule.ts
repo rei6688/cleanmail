@@ -25,6 +25,7 @@ const CategoryActionSchema = new Schema(
       default: "none",
     },
     categories: { type: [String], default: [] },
+    categoryColor: { type: String },
   },
   { _id: false }
 );
@@ -35,7 +36,11 @@ const RuleSchema = new Schema<IRule>(
     name: { type: String, required: true },
     enabled: { type: Boolean, default: true },
     conditions: { type: RuleConditionsSchema, required: true },
-    targetFolder: { type: String, required: true },
+    action: {
+      type: { type: String, enum: ["move", "delete"], default: "move" },
+      targetFolder: { type: String },
+    },
+    retentionDays: { type: Number, default: 0 },
     categoryAction: { type: CategoryActionSchema, required: true },
   },
   { timestamps: true }

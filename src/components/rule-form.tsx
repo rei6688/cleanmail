@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { createRuleAction, updateRuleAction } from "@/actions/rules";
+import { getMailFoldersOptionTree } from "@/actions/folders";
 import type { IRule } from "@/types";
 import type { CreateRuleInput } from "@/schemas/rule";
+
+import { COLOR_PRESETS } from "@/lib/colors";
+import { ColorPicker } from "@/components/common/color-picker";
+import { FolderSelector } from "@/components/common/folder-selector";
+import { TagBadge } from "@/components/common/tag-badge";
 
 interface Props {
   rule?: IRule;
@@ -53,13 +59,30 @@ export function RuleForm({ rule }: Props) {
   const [sourceFolders, setSourceFolders] = useState(
     rule?.conditions.sourceFolders.join(", ") ?? ""
   );
-  const [targetFolder, setTargetFolder] = useState(rule?.targetFolder ?? "");
+  const [actionType, setActionType] = useState<"move" | "delete">(
+    rule?.action?.type ?? "move"
+  );
+  const [targetFolder, setTargetFolder] = useState(
+    rule?.action?.targetFolder ?? ""
+  );
+  const [retentionDays, setRetentionDays] = useState<number | string>(
+    rule?.retentionDays ?? 0
+  );
   const [categoryPolicy, setCategoryPolicy] = useState<
     "add" | "replace" | "remove" | "none"
   >(rule?.categoryAction.policy ?? "none");
   const [categories, setCategories] = useState(
     rule?.categoryAction.categories.join(", ") ?? ""
   );
+  const [categoryColor, setCategoryColor] = useState(
+    rule?.categoryAction.categoryColor ?? "preset0"
+  );
+
+  const [folderOptions, setFolderOptions] = useState<{ label: string, value: string }[]>([]);
+
+  useEffect(() => {
+    getMailFoldersOptionTree().then(setFolderOptions);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,10 +100,15 @@ export function RuleForm({ rule }: Props) {
         readFilter,
         sourceFolders: tagsInput(sourceFolders),
       },
-      targetFolder,
+      action: {
+        type: actionType,
+        targetFolder: actionType === "move" ? targetFolder : undefined,
+      },
+      retentionDays: Number(retentionDays) || 0,
       categoryAction: {
         policy: categoryPolicy,
         categories: tagsInput(categories),
+        categoryColor: categoryColor,
       },
     };
 
@@ -162,23 +190,13 @@ export function RuleForm({ rule }: Props) {
               placeholder="urgent, invoice"
             />
           </div>
-          <div className="space-y-2">
-            <Label>Read status</Label>
-            <Select
-              value={readFilter}
-              onValueChange={(v) =>
-                setReadFilter(v as "read" | "unread" | "any")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">Any</SelectItem>
-                <SelectItem value="read">Read only</SelectItem>
-                <SelectItem value="unread">Unread only</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="readFilterCheck"
+              checked={readFilter === "read"}
+              onCheckedChange={(checked) => setReadFilter(checked ? "read" : "any")}
+            />
+            <Label htmlFor="readFilterCheck">Only move read emails, keep unread in inbox</Label>
           </div>
           <div className="space-y-2">
             <Label>Source folders (comma-separated, empty = inbox)</Label>
@@ -197,14 +215,47 @@ export function RuleForm({ rule }: Props) {
         </legend>
         <div className="mt-3 space-y-4">
           <div className="space-y-2">
-            <Label>Target folder *</Label>
-            <Input
-              value={targetFolder}
-              onChange={(e) => setTargetFolder(e.target.value)}
-              placeholder="Archive"
-              required
-            />
+            <Label>Action Type</Label>
+            <Select
+              value={actionType}
+              onValueChange={(v) => setActionType(v as "move" | "delete")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="move">Move to Folder</SelectItem>
+                <SelectItem value="delete">Delete Message</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {actionType === "move" && (
+            <div className="space-y-2">
+              <Label>Target folder *</Label>
+              <FolderSelector
+                options={folderOptions}
+                value={targetFolder}
+                onChange={setTargetFolder}
+                placeholder="Chọn hoặc nhập tên thư mục"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Delete after N days (0 to never delete)</Label>
+            <Input
+              type="number"
+              min="0"
+              value={retentionDays}
+              onChange={(e) => setRetentionDays(e.target.value)}
+              placeholder="e.g. 7"
+            />
+            <p className="text-xs text-gray-500">
+              Useful for OTPs or notifications. They will be deleted after N days.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label>Category policy</Label>
             <Select
@@ -232,7 +283,19 @@ export function RuleForm({ rule }: Props) {
                 onChange={(e) => setCategories(e.target.value)}
                 placeholder="Newsletter, Automated"
               />
+              <div className="flex flex-wrap gap-2 mt-2 border p-2 rounded bg-muted/30">
+                {tagsInput(categories).length > 0 ? (
+                  tagsInput(categories).map(c => (
+                    <TagBadge key={c} name={c} colorValue={categoryColor} />
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">Xem trước Tag ở đây...</span>
+                )}
+              </div>
             </div>
+          )}
+          {categoryPolicy !== "none" && (
+            <ColorPicker value={categoryColor} onChange={setCategoryColor} label="Màu sắc Label (Category Color)" />
           )}
         </div>
       </fieldset>

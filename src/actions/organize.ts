@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { getOAuthAccount } from "@/repositories/oauth-accounts";
 import { getEnabledRules, getRuleById } from "@/repositories/rules";
 import { getValidToken } from "@/infra/token-refresh";
-import { listMessages } from "@/infra/graph-client";
+import { listMessages, ensureFolderByPath, ensureMasterCategories } from "@/infra/graph-client";
 import { applyRule } from "@/domain/rule-engine";
 import { organizeMessages } from "@/domain/organizer";
 import { createLog } from "@/repositories/execution-logs";
@@ -16,8 +16,10 @@ import { findUserByMicrosoftId } from "@/repositories/users";
 export interface OrganizeResult {
   totalMatched: number;
   totalMoved: number;
+  totalDeleted: number;
   totalFailed: number;
   totalSkipped: number;
+  totalScanned?: number;
 }
 
 export async function organizeEmails(
@@ -56,7 +58,45 @@ export async function organizeEmails(
   }
 
   if (rules.length === 0) {
-    return ok({ totalMatched: 0, totalMoved: 0, totalFailed: 0, totalSkipped: 0 });
+    return ok({ totalMatched: 0, totalMoved: 0, totalDeleted: 0, totalFailed: 0, totalSkipped: 0 });
+  }
+
+  // Pre-ensure master categories are set up so tags have correct colors
+  // Using a Map for deduplication, where the last entry for a name wins.
+  const categoriesMap = new Map<string, { displayName: string; color?: string }>();
+
+  // 1. Add categories from rules (lower priority)
+  for (const r of rules) {
+    if (r.categoryAction.policy !== "none" && r.categoryAction.categories.length > 0) {
+      r.categoryAction.categories.forEach(c => {
+        const name = c.trim();
+        if (name) {
+          categoriesMap.set(name.toLowerCase(), {
+            displayName: name,
+            color: r.categoryAction.categoryColor
+          });
+        }
+      });
+    }
+  }
+
+  // 2. Add staging/manual tags (higher priority - overrides rule colors)
+  if (options.stagingMode && options.stagingTag) {
+    categoriesMap.set(options.stagingTag.trim().toLowerCase(), {
+      displayName: options.stagingTag.trim(),
+      color: options.stagingTagColor
+    });
+  }
+  if (options.addTag) {
+    categoriesMap.set(options.addTag.trim().toLowerCase(), {
+      displayName: options.addTag.trim(),
+      color: options.addTagColor
+    });
+  }
+
+  const categoriesToEnsure = Array.from(categoriesMap.values());
+  if (categoriesToEnsure.length > 0) {
+    await ensureMasterCategories(accessToken, categoriesToEnsure);
   }
 
   // Build date filter
@@ -73,53 +113,103 @@ export async function organizeEmails(
     since.setMonth(since.getMonth() - options.monthsBack);
     filter = `receivedDateTime ge ${since.toISOString()}`;
   } else {
-    // Default 6 months
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    filter = `receivedDateTime ge ${sixMonthsAgo.toISOString()}`;
+    // Default 3 months to avoid timeout and excessive processing
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    filter = `receivedDateTime ge ${threeMonthsAgo.toISOString()}`;
+  }
+
+  // Build targeted filter if single rule for high efficiency
+  if (options.ruleId && rules.length === 1) {
+    const singleRule = rules[0];
+    if (singleRule.conditions.senders.length > 0) {
+      const senderFilters = singleRule.conditions.senders
+        .map((s) => `from/emailAddress/address eq '${s.trim()}'`)
+        .join(" or ");
+      filter = filter ? `(${filter}) and (${senderFilters})` : `(${senderFilters})`;
+    }
   }
 
   console.log(`[organize] User: ${dbUser.email}, Filter: ${filter}, Rules: ${rules.length}`);
 
   const startedAt = new Date();
-  const ruleStats = new Map<string, { matched: number; moved: number; failed: number }>();
+  const ruleStats = new Map<string, { matched: number; moved: number; deleted: number; failed: number }>();
   rules.forEach((r) => {
-    ruleStats.set(String(r._id), { matched: 0, moved: 0, failed: 0 });
+    ruleStats.set(String(r._id), { matched: 0, moved: 0, deleted: 0, failed: 0 });
   });
 
   // Collect unique source folders
   const allFolders = new Set<string>();
-  rules.forEach((r) => {
-    if (r.conditions.sourceFolders.length > 0) {
-      r.conditions.sourceFolders.forEach((f) => allFolders.add(f));
-    } else {
-      allFolders.add("inbox");
-    }
-  });
+  if (options.runInTargetFolder) {
+    rules.forEach((r) => {
+      const target = r.action?.targetFolder || (r as any).targetFolder;
+      if (target) allFolders.add(target);
+    });
+  } else if (options.overrideSourceFolders && options.overrideSourceFolders.length > 0) {
+    options.overrideSourceFolders.forEach(f => allFolders.add(f));
+  } else {
+    rules.forEach((r) => {
+      if (r.conditions.sourceFolders.length > 0) {
+        r.conditions.sourceFolders.forEach((f) => allFolders.add(f));
+      } else {
+        allFolders.add("inbox");
+      }
+    });
+  }
 
-  const MAX_PAGES = 5;
+  const MAX_SCANNED = options.ruleId ? 3000 : 1000; // Allow deeper scan for targeted rule
+  let totalScanned = 0;
+  const MAX_PAGES = 50;
   for (const folder of Array.from(allFolders)) {
     console.log(`[organize] Scanning folder: ${folder}`);
+
+    let folderId = folder;
+    const lowerFolder = folder.toLowerCase();
+    const wellKnownFolders = ["inbox", "archive", "deleteditems", "drafts", "sentitems", "junkemail", "outbox"];
+    if (!wellKnownFolders.includes(lowerFolder)) {
+      try {
+        folderId = await ensureFolderByPath(accessToken, folder);
+      } catch (err) {
+        console.warn(`[organize] Skipping folder "${folder}" - could not resolve its ID.`, err);
+        continue;
+      }
+    }
+
     let nextLink: string | undefined;
     let pages = 0;
     do {
       const { value, nextLink: nl } = await listMessages(accessToken, {
-        folder,
+        folder: folderId,
         filter,
         top: 50,
       });
       nextLink = nl;
       pages++;
 
+      if (options.ruleId) {
+        console.log(`[organize] Page ${pages}: Fetched ${value.length} potential items for targeted searching`);
+      }
+
       for (const message of value) {
+        totalScanned++;
+        if (totalScanned > MAX_SCANNED) {
+          console.log(`[organize] Hard limit reached (${MAX_SCANNED}). Stopping to prevent timeout.`);
+          break;
+        }
+
+        if (options.ruleId) {
+          console.log(`[debug] [${totalScanned}] Checking: "${message.subject}" from "${message.from?.emailAddress?.address}" (Read: ${message.isRead})`);
+        }
         for (const rule of rules) {
           const isTargeted =
+            !!options.runInTargetFolder ||
+            !!options.overrideSourceFolders ||
             (rule.conditions.sourceFolders.length === 0 && folder === "inbox") ||
             rule.conditions.sourceFolders.some(
               (f) => f.toLowerCase() === folder.toLowerCase()
             );
 
-          if (isTargeted && applyRule([message], rule).length > 0) {
+          if (isTargeted && applyRule([message], rule, { ignoreRetention: !!options.ruleId }).length > 0) {
             const stats = ruleStats.get(String(rule._id))!;
             stats.matched++;
 
@@ -129,12 +219,20 @@ export async function organizeEmails(
                   accessToken,
                   [message],
                   rule,
-                  false
+                  false,
+                  options.stagingMode,
+                  options.stagingTag,
+                  options.onlyTagMode,
+                  options.removeTag,
+                  options.addTag,
+                  options.clearCategories
                 );
                 stats.moved += result.stats.moved;
+                stats.deleted += result.stats.deleted;
                 stats.failed += result.stats.failed;
               } else {
-                stats.moved++;
+                if (rule.action?.type === "delete") stats.deleted++;
+                else stats.moved++;
               }
             } catch (err) {
               console.error(
@@ -146,17 +244,21 @@ export async function organizeEmails(
           }
         }
       }
+      if (totalScanned > MAX_SCANNED) break;
     } while (nextLink && pages < MAX_PAGES);
+    if (totalScanned > MAX_SCANNED) break;
   }
 
   // Persist logs and calculate total
   let totalMatched = 0,
     totalMoved = 0,
+    totalDeleted = 0,
     totalFailed = 0;
   for (const rule of rules) {
     const stats = ruleStats.get(String(rule._id))!;
     totalMatched += stats.matched;
     totalMoved += stats.moved;
+    totalDeleted += stats.deleted;
     totalFailed += stats.failed;
 
     if (stats.matched > 0 || stats.failed > 0) {
@@ -169,6 +271,7 @@ export async function organizeEmails(
         stats: {
           matched: stats.matched,
           moved: stats.moved,
+          deleted: stats.deleted,
           skipped: 0,
           failed: stats.failed,
         },
@@ -178,5 +281,12 @@ export async function organizeEmails(
     }
   }
 
-  return ok({ totalMatched, totalMoved, totalFailed, totalSkipped: 0 });
+  return ok({
+    totalMatched,
+    totalMoved,
+    totalDeleted,
+    totalFailed,
+    totalScanned,
+    totalSkipped: 0
+  });
 }

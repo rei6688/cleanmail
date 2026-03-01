@@ -6,32 +6,39 @@ import type { IRule, GraphMessage } from "@/types";
  */
 export function messageMatchesRule(
   message: GraphMessage,
-  rule: IRule
+  rule: IRule,
+  options?: { ignoreRetention?: boolean }
 ): boolean {
   const cond = rule.conditions;
-  const subject = (message.subject ?? "").toLowerCase();
+  const subject = (message.subject ?? "").toLowerCase().normalize("NFC");
   const sender = (
     message.from?.emailAddress?.address ?? ""
-  ).toLowerCase();
+  ).toLowerCase().normalize("NFC");
 
   // ── sender filter ──────────────────────────────────────────────────────────
   if (cond.senders.length > 0) {
-    const matchesSender = cond.senders.some((s) =>
-      sender.includes(s.toLowerCase())
-    );
+    const matchesSender = cond.senders.some((s) => {
+      const cleanS = s.toLowerCase().trim().normalize("NFC");
+      return sender.includes(cleanS);
+    });
     if (!matchesSender) {
-      console.log(`[match] Fail: Sender "${sender}" does not match [${cond.senders}]`);
+      if (rule.name.includes("VIB") || cond.senders.some(s => s.includes("vib"))) {
+        console.log(`[debug] Sender mismatch for VIB rule: "${sender}" does not contain any of [${cond.senders}]`);
+      }
       return false;
     }
   }
 
   // ── subject keyword filter (include) ─────────────────────────────────────
   if (cond.subjectKeywords.length > 0) {
-    const matchesKeyword = cond.subjectKeywords.some((kw) =>
-      subject.includes(kw.toLowerCase())
-    );
+    const matchesKeyword = cond.subjectKeywords.some((kw) => {
+      const cleanKw = kw.toLowerCase().trim().normalize("NFC");
+      return subject.includes(cleanKw);
+    });
     if (!matchesKeyword) {
-      console.log(`[match] Fail: Subject "${subject}" does not match [${cond.subjectKeywords}]`);
+      if (rule.name.includes("VIB") || cond.senders.some(s => s.includes("vib"))) {
+        console.log(`[debug] Subject mismatch! Mail: "${subject}" | Rule needs any of: [${cond.subjectKeywords.map(k => k.toLowerCase().trim())}]`);
+      }
       return false;
     }
   }
@@ -43,10 +50,12 @@ export function messageMatchesRule(
     ).toLowerCase();
 
     const matchesBodyKeyword = cond.bodyKeywords.some((kw) =>
-      bodyText.includes(kw.toLowerCase())
+      bodyText.includes(kw.toLowerCase().normalize("NFC"))
     );
     if (!matchesBodyKeyword) {
-      console.log(`[match] Fail: Body (len: ${bodyText.length}) does not match [${cond.bodyKeywords}]`);
+      if (cond.senders.length > 0) {
+        console.log(`[debug] Body mismatch! Body does not contain: [${cond.bodyKeywords.map(k => k.toLowerCase())}]`);
+      }
       return false;
     }
   }
@@ -54,17 +63,34 @@ export function messageMatchesRule(
   // ── subject keyword filter (exclude) ─────────────────────────────────────
   if (cond.excludeKeywords.length > 0) {
     const matchesExclude = cond.excludeKeywords.some((kw) =>
-      subject.includes(kw.toLowerCase())
+      subject.includes(kw.toLowerCase().normalize("NFC"))
     );
-    if (matchesExclude) {
-      console.log(`[match] Fail: Subject excluded by "${subject}" contains [${cond.excludeKeywords}]`);
-      return false;
-    }
+    if (matchesExclude) return false;
   }
 
   // ── read/unread filter ─────────────────────────────────────────────────────
-  if (cond.readFilter === "read" && message.isRead !== true) return false;
+  // User requested to disable this filter or "ignore" it ("bỏ qua vụ read, unread đi nha")
+  /*
+  if (cond.readFilter === "read" && message.isRead !== true) {
+    if (rule.name.includes("VIB")) console.log(`[debug] Skip: Rule requires READ mail, but this is UNREAD`);
+    return false;
+  }
   if (cond.readFilter === "unread" && message.isRead !== false) return false;
+  */
+
+  // ── retention filter ───────────────────────────────────────────────────────
+  if (rule.retentionDays && rule.retentionDays > 0 && !options?.ignoreRetention) {
+    if (!message.receivedDateTime) return false;
+    const receivedDate = new Date(message.receivedDateTime);
+    const ageInMs = Date.now() - receivedDate.getTime();
+    const retentionMs = rule.retentionDays * 24 * 60 * 60 * 1000;
+
+    if (ageInMs < retentionMs) {
+      const daysOld = Math.floor(ageInMs / (1000 * 60 * 60 * 24));
+      console.log(`[match] Skip: Mail is too new (${daysOld} days old). Rule requires ${rule.retentionDays} days aging.`);
+      return false;
+    }
+  }
 
   console.log(`[match] SUCCESS: Found mail "${subject}"`);
   return true;
@@ -75,10 +101,11 @@ export function messageMatchesRule(
  */
 export function applyRule(
   messages: GraphMessage[],
-  rule: IRule
+  rule: IRule,
+  options?: { ignoreRetention?: boolean }
 ): GraphMessage[] {
   if (!rule.enabled) return [];
-  return messages.filter((m) => messageMatchesRule(m, rule));
+  return messages.filter((m) => messageMatchesRule(m, rule, options));
 }
 
 /**

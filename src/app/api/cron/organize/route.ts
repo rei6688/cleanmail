@@ -36,8 +36,8 @@ export async function GET(request: Request) {
           // 1. Fetch messages matching the rule's source folders (default inbox)
           // We limit top 100 for cron to avoid timeouts
           const { value: messages } = await listMessages(accessToken, {
-             folder: (rule.conditions.sourceFolders?.[0]) || "inbox",
-             top: 100
+            folder: (rule.conditions.sourceFolders?.[0]) || "inbox",
+            top: 100
           });
 
           // 2. Filter messages in-memory using rule-engine (including body search)
@@ -64,14 +64,14 @@ export async function GET(request: Request) {
         } catch (ruleErr: any) {
           console.error(`[cron] Error processing rule ${rule.name} for user ${user.email}:`, ruleErr);
           await createLog({
-             userId: user._id,
-             ruleId: rule._id,
-             ruleName: rule.name,
-             status: "error",
-             stats: { matched: 0, moved: 0, skipped: 0, failed: 0 },
-             errorMessage: ruleErr.message,
-             startedAt,
-             finishedAt: new Date(),
+            userId: user._id,
+            ruleId: rule._id,
+            ruleName: rule.name,
+            status: "error",
+            stats: { matched: 0, moved: 0, deleted: 0, skipped: 0, failed: 0 },
+            errorMessage: ruleErr.message,
+            startedAt,
+            finishedAt: new Date(),
           });
         }
       }

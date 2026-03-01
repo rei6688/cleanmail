@@ -1,7 +1,7 @@
 import { connectDB } from "@/infra/db/connection";
 import { ExecutionLog } from "@/models/execution-log";
 import type { IExecutionLog, ExecutionStats, LogStatus } from "@/types";
-import type { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { pojoify } from "@/lib/utils";
 
 export interface CreateLogInput {
@@ -35,23 +35,52 @@ export async function getLogs(
 
 export async function getRecentStats(
   userId: string | Types.ObjectId
-): Promise<{ totalMoved: number; totalFailed: number; runs: number }> {
+): Promise<{ totalMoved: number; totalDeleted: number; totalFailed: number; runs: number }> {
   await connectDB();
   const result = await ExecutionLog.aggregate([
-    { $match: { userId } },
+    { $match: { userId: new mongoose.Types.ObjectId(userId.toString()) } },
     {
       $group: {
         _id: null,
         totalMoved: { $sum: "$stats.moved" },
+        totalDeleted: { $sum: "$stats.deleted" },
         totalFailed: { $sum: "$stats.failed" },
         runs: { $sum: 1 },
       },
     },
   ]);
-  if (!result.length) return { totalMoved: 0, totalFailed: 0, runs: 0 };
+  if (!result.length) return { totalMoved: 0, totalDeleted: 0, totalFailed: 0, runs: 0 };
   return {
     totalMoved: result[0].totalMoved,
+    totalDeleted: result[0].totalDeleted,
     totalFailed: result[0].totalFailed,
     runs: result[0].runs,
   };
+}
+
+export async function getDailyActivity(
+  userId: string | Types.ObjectId,
+  days = 7
+) {
+  await connectDB();
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  const result = await ExecutionLog.aggregate([
+    {
+      $match: {
+        userId: new mongoose.Types.ObjectId(userId.toString()),
+        startedAt: { $gte: since }
+      }
+    },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$startedAt" } },
+        count: { $sum: { $add: ["$stats.moved", { $ifNull: ["$stats.deleted", 0] }] } },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  return pojoify(result);
 }

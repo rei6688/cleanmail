@@ -10,7 +10,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
       // Manually set endpoints to bypass strict OIDC issuer validation for "common" tenant
       authorization:
-        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?scope=openid+email+profile+offline_access+Mail.ReadWrite+MailboxSettings.Read",
+        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?scope=openid+email+profile+offline_access+Mail.ReadWrite+MailboxSettings.ReadWrite",
       token: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
       userinfo: "https://graph.microsoft.com/oidc/userinfo",
       client: {
@@ -21,7 +21,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: profile.sub,
           name: profile.name,
           email: profile.email,
-          image: profile.picture,
+          image: (profile as any).picture,
         };
       },
     }),

@@ -9,12 +9,14 @@ import {
   ScrollText,
   LogOut,
   Mail,
+  Wrench,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/rules", label: "Rules", icon: ListFilter },
   { href: "/scan", label: "Scan", icon: Search },
+  { href: "/maintenance", label: "Maintenance", icon: Wrench },
   { href: "/logs", label: "Logs", icon: ScrollText },
 ];
 
