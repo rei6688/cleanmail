@@ -17,11 +17,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token_endpoint_auth_method: "client_secret_post",
       },
       profile(profile) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = profile as any;
         return {
-          id: profile.sub,
-          name: profile.name,
-          email: profile.email,
-          image: (profile as any).picture,
+          id: p.sub,
+          name: p.name,
+          email: p.email,
+          image: p.picture ?? null,
         };
       },
     }),
